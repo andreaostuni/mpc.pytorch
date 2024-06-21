@@ -524,78 +524,79 @@ More details: https://github.com/locuslab/mpc.pytorch/issues/12
             return F, f
         else:
             # TODO: This is inefficient and confusing.
-            x_init = x[0]
-            x = [x_init]
-            F, f = [], []
-            for t in range(self.T):
-                if t < self.T-1:
-                    xt = Variable(x[t], requires_grad=True)
-                    ut = Variable(u[t], requires_grad=True)
-                    xut = torch.cat((xt, ut), 1)
-                    new_x = dynamics(xt, ut)
+            with torch.enable_grad():
+                x_init = x[0]
+                x = [x_init]
+                F, f = [], []
+                for t in range(self.T):
+                    if t < self.T-1:
+                        xt = Variable(x[t], requires_grad=True)
+                        ut = Variable(u[t], requires_grad=True)
+                        xut = torch.cat((xt, ut), 1)
+                        new_x = dynamics(xt, ut)
 
-                    # Linear dynamics approximation.
-                    if self.grad_method in [GradMethods.AUTO_DIFF,
-                                             GradMethods.ANALYTIC_CHECK]:
-                        Rt, St = [], []
-                        for j in range(self.n_state):
-                            Rj, Sj = torch.autograd.grad(
-                                new_x[:,j].sum(), [xt, ut],
-                                retain_graph=True)
-                            if not diff:
-                                Rj, Sj = Rj.data, Sj.data
-                            Rt.append(Rj)
-                            St.append(Sj)
-                        Rt = torch.stack(Rt, dim=1)
-                        St = torch.stack(St, dim=1)
+                        # Linear dynamics approximation.
+                        if self.grad_method in [GradMethods.AUTO_DIFF,
+                                                GradMethods.ANALYTIC_CHECK]:
+                                Rt, St = [], []
+                                for j in range(self.n_state):
+                                    Rj, Sj = torch.autograd.grad(
+                                        new_x[:,j].sum(), [xt, ut],
+                                        retain_graph=True)
+                                    if not diff:
+                                        Rj, Sj = Rj.data, Sj.data
+                                    Rt.append(Rj)
+                                    St.append(Sj)
+                                Rt = torch.stack(Rt, dim=1)
+                                St = torch.stack(St, dim=1)
 
-                        if self.grad_method == GradMethods.ANALYTIC_CHECK:
-                            assert False # Not updated
-                            Rt_autograd, St_autograd = Rt, St
-                            Rt, St = dynamics.grad_input(xt, ut)
-                            eps = 1e-8
-                            if torch.max(torch.abs(Rt-Rt_autograd)).data[0] > eps or \
-                            torch.max(torch.abs(St-St_autograd)).data[0] > eps:
-                                print('''
-        nmpc.ANALYTIC_CHECK error: The analytic derivative of the dynamics function may be off.
-                                ''')
-                            else:
-                                print('''
-        nmpc.ANALYTIC_CHECK: The analytic derivative of the dynamics function seems correct.
-        Re-run with GradMethods.ANALYTIC to continue.
-                                ''')
-                            sys.exit(0)
-                    elif self.grad_method == GradMethods.FINITE_DIFF:
-                        Rt, St = [], []
-                        for i in range(n_batch):
-                            Ri = util.jacobian(
-                                lambda s: dynamics(s, ut[i]), xt[i], 1e-4
-                            )
-                            Si = util.jacobian(
-                                lambda a : dynamics(xt[i], a), ut[i], 1e-4
-                            )
-                            if not diff:
-                                Ri, Si = Ri.data, Si.data
-                            Rt.append(Ri)
-                            St.append(Si)
-                        Rt = torch.stack(Rt)
-                        St = torch.stack(St)
-                    else:
-                        assert False
+                                if self.grad_method == GradMethods.ANALYTIC_CHECK:
+                                    assert False # Not updated
+                                    Rt_autograd, St_autograd = Rt, St
+                                    Rt, St = dynamics.grad_input(xt, ut)
+                                    eps = 1e-8
+                                    if torch.max(torch.abs(Rt-Rt_autograd)).data[0] > eps or \
+                                    torch.max(torch.abs(St-St_autograd)).data[0] > eps:
+                                        print('''
+                nmpc.ANALYTIC_CHECK error: The analytic derivative of the dynamics function may be off.
+                                        ''')
+                                    else:
+                                        print('''
+                nmpc.ANALYTIC_CHECK: The analytic derivative of the dynamics function seems correct.
+                Re-run with GradMethods.ANALYTIC to continue.
+                                        ''')
+                                    sys.exit(0)
+                        elif self.grad_method == GradMethods.FINITE_DIFF:
+                            Rt, St = [], []
+                            for i in range(n_batch):
+                                Ri = util.jacobian(
+                                    lambda s: dynamics(s, ut[i]), xt[i], 1e-4
+                                )
+                                Si = util.jacobian(
+                                    lambda a : dynamics(xt[i], a), ut[i], 1e-4
+                                )
+                                if not diff:
+                                    Ri, Si = Ri.data, Si.data
+                                Rt.append(Ri)
+                                St.append(Si)
+                            Rt = torch.stack(Rt)
+                            St = torch.stack(St)
+                        else:
+                            assert False
 
-                    Ft = torch.cat((Rt, St), 2)
-                    F.append(Ft)
+                        Ft = torch.cat((Rt, St), 2)
+                        F.append(Ft)
 
-                    if not diff:
-                        xt, ut, new_x = xt.data, ut.data, new_x.data
-                    ft = new_x - util.bmv(Rt, xt) - util.bmv(St, ut)
-                    f.append(ft)
+                        if not diff:
+                            xt, ut, new_x = xt.data, ut.data, new_x.data
+                        ft = new_x - util.bmv(Rt, xt) - util.bmv(St, ut)
+                        f.append(ft)
 
-                if t < self.T-1:
-                    x.append(util.detach_maybe(new_x))
+                    if t < self.T-1:
+                        x.append(util.detach_maybe(new_x))
 
-            F = torch.stack(F, 0)
-            f = torch.stack(f, 0)
-            if not diff:
-                F, f = list(map(Variable, [F, f]))
-            return F, f
+                F = torch.stack(F, 0)
+                f = torch.stack(f, 0)
+                if not diff:
+                    F, f = list(map(Variable, [F, f]))
+                return F, f

@@ -127,8 +127,8 @@ def LQRStep(n_state,
                             kt = -qt_u_.unsqueeze(2).lu_solve(*Qt_uu_LU_).squeeze(2)
             else:
                 assert delta_space
-                lb = get_bound('lower', t) - u[t]
-                ub = get_bound('upper', t) - u[t]
+                lb = get_bound('lower', t, n_batch=n_batch, device=u.device) - u[t]
+                ub = get_bound('upper', t, n_batch=n_batch, device=u.device) - u[t]
                 if delta_u is not None:
                     lb[lb < -delta_u] = -delta_u
                     ub[ub > delta_u] = delta_u
@@ -198,8 +198,8 @@ def LQRStep(n_state,
                     new_ut[u_zero_I[t]] = 0.
 
                 if u_lower is not None:
-                    lb = get_bound('lower', t)
-                    ub = get_bound('upper', t)
+                    lb = get_bound('lower', t, n_batch=n_batch, device=u.device)
+                    ub = get_bound('upper', t, n_batch=n_batch, device=u.device)
 
                     if delta_u is not None:
                         lb_limit, ub_limit = lb, ub
@@ -261,12 +261,17 @@ def LQRStep(n_state,
         )
 
 
-    def get_bound(side, t):
+    def get_bound(side, t, n_batch=None, device='cpu'):
         if side == 'lower':
             v = u_lower
         if side == 'upper':
             v = u_upper
         if isinstance(v, float):
+            return v
+        if isinstance(v, torch.Tensor) and v.ndimension() == 1:
+            # tensor with shape [n_batch, n_ctrl]
+            # where v is a numpy array of shape [n_ctrl]
+            v = torch.tile(v, (1, n_batch)).reshape(n_batch, -1).to(device)
             return v
         else:
             return v[t]
@@ -322,8 +327,9 @@ def LQRStep(n_state,
             if u_lower is None:
                 I = None
             else:
-                I = (torch.abs(new_u - u_lower) <= 1e-8) | \
-                    (torch.abs(new_u - u_upper) <= 1e-8)
+                n_batch = C.size(1)
+                I = (torch.abs(new_u - get_bound('lower', t, n_batch=n_batch, device=x_init.device)) <= 1e-8) | \
+                    (torch.abs(new_u - get_bound('upper', t, n_batch=n_batch, device=x_init.device)) <= 1e-8)
             dx_init = Variable(torch.zeros_like(x_init))
             _mpc = mpc.MPC(
                 n_state, n_ctrl, T,
