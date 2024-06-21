@@ -32,7 +32,7 @@ def bdiag(d):
     nBatch, sz = d.size()
     dtype = d.type() if not isinstance(d, Variable) else d.data.type()
     D = torch.zeros(nBatch, sz, sz).type(dtype)
-    I = torch.eye(sz).repeat(nBatch, 1, 1).type(dtype).byte()
+    I = torch.eye(sz).repeat(nBatch, 1, 1).type(dtype).bool()
     D[I] = d.view(-1)
     return D
 
