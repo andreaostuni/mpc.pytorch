@@ -2,6 +2,7 @@ import torch
 from torch.autograd import Function, Variable
 from torch.nn import Module
 from torch.nn.parameter import Parameter
+import warnings
 
 import numpy as np
 import numpy.random as npr
@@ -324,8 +325,8 @@ class MPC(Module):
                     assert False
 
                 if self.verbose >= 0:
-                    print("LQR Warning: All examples did not converge to a fixed point.")
-                    print("Detaching and *not* backpropping through the bad examples.")
+                    warnings.warn("LQR Warning: All examples did not converge to a fixed point.")
+                    warnings.warn("Detaching and *not* backpropping through the bad examples.")
 
                 I = full_du_norm < self.eps
                 Ix = Variable(I.unsqueeze(0).unsqueeze(2).expand_as(x)).type_as(x.data)

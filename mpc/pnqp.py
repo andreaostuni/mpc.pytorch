@@ -1,4 +1,5 @@
 import torch
+import warnings
 from . import util
 
 # @profile
@@ -79,4 +80,5 @@ def pnqp(H, q, lower, upper, x_init=None, n_iter=20):
 
     # TODO: Maybe change this to a warning.
     # print("[WARNING] pnqp warning: Did not converge")
+    warnings.warn("Did not converge")
     return x, H_ if n == 1 else H_lu_, If, i
