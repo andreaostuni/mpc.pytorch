@@ -33,16 +33,16 @@ def main():
         dx = pendulum.PendulumDx()
         xinit = torch.zeros(n_batch, dx.n_state)
         th = 1.0
-        xinit[:,0] = np.cos(th)
-        xinit[:,1] = np.sin(th)
-        xinit[:,2] = -0.5
+
+        xinit[:,0] = torch.cos(th)
+        xinit[:,2] = torch.sin(th)
     elif args.env == 'cartpole':
         T = 20
         dx = cartpole.CartpoleDx()
         xinit = torch.zeros(n_batch, dx.n_state)
         th = 0.5
-        xinit[:,2] = np.cos(th)
-        xinit[:,3] = np.sin(th)
+        xinit[:,2] = torch.cos(th)
+        xinit[:,3] = torch.sin(th)
     else:
         assert False
 
